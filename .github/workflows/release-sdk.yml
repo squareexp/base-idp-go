@@ -1,0 +1,45 @@
+name: Release Base IdP Go SDK
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Go SDK assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test module
+        run: go test ./...
+
+      - name: Pack source archive
+        run: |
+          set -euo pipefail
+          rm -rf release
+          mkdir -p release
+          tar -czf "release/base-idp-go-sdk-${GITHUB_REF_NAME}.tar.gz" \
+            --exclude=.git \
+            --exclude=release \
+            -C . .
+
+      - name: Upload GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release/*.tar.gz
+          generate_release_notes: true
