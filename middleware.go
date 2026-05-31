@@ -1,4 +1,4 @@
-package squareidp
+package baseidp
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 type contextKey string
 
-const principalContextKey contextKey = "square-idp-principal"
+const principalContextKey contextKey = "base-idp-principal"
 
 type MiddlewareOptions struct {
 	VerifyOptions

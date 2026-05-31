@@ -1,3 +1,3 @@
-module github.com/squareexp/idp-go
+module github.com/squareexp/base-idp
 
 go 1.23

@@ -1,13 +1,14 @@
-package squareidp
+package baseidp
 
 import "errors"
 
 var (
-	ErrInvalidConfig     = errors.New("square idp: invalid config")
-	ErrDiscoveryFailed   = errors.New("square idp: discovery failed")
-	ErrKeyFetchFailed    = errors.New("square idp: key fetch failed")
-	ErrTokenExchange     = errors.New("square idp: token exchange failed")
-	ErrMissingBearer     = errors.New("square idp: missing bearer token")
-	ErrInvalidToken      = errors.New("square idp: invalid access token")
-	ErrInsufficientScope = errors.New("square idp: insufficient scope")
+	ErrInvalidConfig     = errors.New("base idp: invalid config")
+	ErrConfigDiscovery   = errors.New("base idp: config discovery failed")
+	ErrDiscoveryFailed   = errors.New("base idp: discovery failed")
+	ErrKeyFetchFailed    = errors.New("base idp: key fetch failed")
+	ErrTokenExchange     = errors.New("base idp: token exchange failed")
+	ErrMissingBearer     = errors.New("base idp: missing bearer token")
+	ErrInvalidToken      = errors.New("base idp: invalid access token")
+	ErrInsufficientScope = errors.New("base idp: insufficient scope")
 )

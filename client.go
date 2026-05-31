@@ -1,4 +1,4 @@
-package squareidp
+package baseidp
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,10 +24,19 @@ type Client struct {
 
 func New(config Config) (*Client, error) {
 	config = config.normalized()
-	if config.Issuer == "" || config.ClientID == "" || config.RedirectURI == "" {
-		return nil, fmt.Errorf("%w: issuer, client id, and redirect uri are required", ErrInvalidConfig)
+	if config.Key == "" {
+		return nil, fmt.Errorf("%w: base key is required (set BASE_IDP_KEY)", ErrInvalidConfig)
 	}
-	return &Client{cfg: config}, nil
+	if config.Issuer == "" {
+		return nil, fmt.Errorf("%w: issuer is required (set BASE_IDP_ISSUER)", ErrInvalidConfig)
+	}
+	client := &Client{cfg: config}
+	if !config.resolvedConfig {
+		if err := client.resolveConfig(context.Background()); err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
 }
 
 func MustNew(config Config) *Client {
@@ -39,6 +49,53 @@ func MustNew(config Config) *Client {
 
 func (c *Client) Config() Config {
 	return c.cfg
+}
+
+func (c *Client) resolveConfig(ctx context.Context) error {
+	u := c.cfg.Issuer + "/v1/client-config?key=" + url.QueryEscape(c.cfg.Key)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrConfigDiscovery, err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	res, err := c.cfg.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrConfigDiscovery, err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("%w: read response: %v", ErrConfigDiscovery, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: status=%d body=%s", ErrConfigDiscovery, res.StatusCode, string(body))
+	}
+
+	var clientCfg ClientConfigResponse
+	if err := json.Unmarshal(body, &clientCfg); err != nil {
+		return fmt.Errorf("%w: decode json: %v", ErrConfigDiscovery, err)
+	}
+
+	c.cfg.ClientID = clientCfg.ClientID
+	c.cfg.Issuer = strings.TrimRight(clientCfg.Issuer, "/")
+	c.cfg.confidential = clientCfg.Confidential
+	c.cfg.allowedScopes = clientCfg.AllowedScopes
+	c.cfg.allowedAuthMethods = clientCfg.AllowedAuthMethods
+
+	if c.cfg.RedirectURI == "" && len(clientCfg.AllowedRedirectURIs) > 0 {
+		c.cfg.RedirectURI = clientCfg.AllowedRedirectURIs[0]
+	}
+	if len(c.cfg.Scopes) == 0 && len(clientCfg.AllowedScopes) > 0 {
+		c.cfg.Scopes = clientCfg.AllowedScopes
+	}
+	if c.cfg.Audience == "" {
+		c.cfg.Audience = DefaultAudience
+	}
+
+	c.cfg.resolvedConfig = true
+	return nil
 }
 
 func (c *Client) AuthorizeURL(options AuthorizeOptions) (string, error) {
@@ -63,6 +120,9 @@ func (c *Client) AuthorizeURL(options AuthorizeOptions) (string, error) {
 	}
 	if options.Nonce != "" {
 		q.Set("nonce", options.Nonce)
+	}
+	if options.AuthSessionID != "" {
+		q.Set("auth_session_id", options.AuthSessionID)
 	}
 	if options.CodeChallenge != "" {
 		q.Set("code_challenge", options.CodeChallenge)
@@ -149,8 +209,8 @@ func (c *Client) ExchangeCode(ctx context.Context, options TokenOptions) (*Token
 		"client_id":    {c.cfg.ClientID},
 		"redirect_uri": {firstNonEmpty(options.RedirectURI, c.cfg.RedirectURI)},
 	}
-	if c.cfg.ClientSecret != "" {
-		form.Set("client_secret", c.cfg.ClientSecret)
+	if c.cfg.Secret != "" {
+		form.Set("client_secret", c.cfg.Secret)
 	}
 	if options.CodeVerifier != "" {
 		form.Set("code_verifier", options.CodeVerifier)
@@ -167,8 +227,8 @@ func (c *Client) Refresh(ctx context.Context, options RefreshOptions) (*TokenPai
 		"refresh_token": {options.RefreshToken},
 		"client_id":     {c.cfg.ClientID},
 	}
-	if c.cfg.ClientSecret != "" {
-		form.Set("client_secret", c.cfg.ClientSecret)
+	if c.cfg.Secret != "" {
+		form.Set("client_secret", c.cfg.Secret)
 	}
 	if len(options.Scopes) > 0 {
 		form.Set("scope", JoinScopes(options.Scopes))
@@ -225,4 +285,13 @@ func (c *Client) doJSON(req *http.Request, out any, wrap error) error {
 		return fmt.Errorf("%w: decode json: %v", wrap, err)
 	}
 	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

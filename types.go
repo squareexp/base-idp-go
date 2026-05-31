@@ -1,4 +1,4 @@
-package squareidp
+package baseidp
 
 import (
 	"net/http"
@@ -15,9 +15,11 @@ const (
 )
 
 type Config struct {
+	Key    string
+	Secret string
+
 	Issuer        string
 	ClientID      string
-	ClientSecret  string
 	RedirectURI   string
 	Scopes        []string
 	Audience      string
@@ -25,17 +27,22 @@ type Config struct {
 	HTTPClient    *http.Client
 	KeyCacheTTL   time.Duration
 	ClockSkew     time.Duration
+
+	allowedOrigins      []string
+	allowedScopes       []string
+	allowedAuthMethods  []string
+	confidential        bool
+	resolvedConfig      bool
 }
 
 func ConfigFromEnv() Config {
 	return Config{
-		Issuer:        os.Getenv("BASE_IDP_ISSUER"),
-		ClientID:      os.Getenv("BASE_IDP_CLIENT_ID"),
-		ClientSecret:  os.Getenv("BASE_IDP_CLIENT_SECRET"),
-		RedirectURI:   os.Getenv("BASE_IDP_REDIRECT_URI"),
-		Scopes:        SplitScopes(os.Getenv("BASE_IDP_SCOPES")),
-		Audience:      envDefault("BASE_IDP_AUDIENCE", DefaultAudience),
+		Key:          os.Getenv("BASE_IDP_KEY"),
+		Secret:       firstNonEmpty(os.Getenv("BASE_IDP_CLIENT_SECRET"), os.Getenv("BASE_IDP_SECRET")),
+		Issuer:       os.Getenv("BASE_IDP_ISSUER"),
 		RequiredScope: os.Getenv("BASE_IDP_REQUIRED_SCOPE"),
+		Scopes:       SplitScopes(os.Getenv("BASE_IDP_SCOPES")),
+		Audience:     envDefault("BASE_IDP_AUDIENCE", DefaultAudience),
 	}
 }
 
@@ -54,6 +61,25 @@ func (c Config) normalized() Config {
 		c.ClockSkew = DefaultClockSkew
 	}
 	return c
+}
+
+type ClientConfigResponse struct {
+	ClientID              string   `json:"client_id"`
+	AnonKey               string   `json:"anon_key"`
+	Product               string   `json:"product"`
+	DisplayName           string   `json:"display_name"`
+	AppDomain             string   `json:"app_domain"`
+	LogoURL               string   `json:"logo_url,omitempty"`
+	Issuer                string   `json:"issuer"`
+	AuthorizationEndpoint string   `json:"authorization_endpoint"`
+	TokenEndpoint         string   `json:"token_endpoint"`
+	PasetoKeyEndpoint     string   `json:"paseto_public_key_endpoint"`
+	AllowedRedirectURIs   []string `json:"allowed_redirect_uris"`
+	AllowedScopes         []string `json:"allowed_scopes"`
+	AllowedAuthMethods    []string `json:"allowed_auth_methods"`
+	RequestedClaims       []string `json:"requested_claims"`
+	Confidential          bool     `json:"confidential"`
+	Status                string   `json:"status"`
 }
 
 type Metadata struct {
@@ -87,6 +113,7 @@ type AuthorizeOptions struct {
 	Nonce               string
 	Scopes              []string
 	RedirectURI         string
+	AuthSessionID       string
 	CodeChallenge       string
 	CodeChallengeMethod string
 	AdditionalParameter map[string]string

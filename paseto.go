@@ -1,4 +1,4 @@
-package squareidp
+package baseidp
 
 import (
 	"bytes"
@@ -126,7 +126,10 @@ func selectPublicKey(keySet PublicKeySet, kid string) (ed25519.PublicKey, error)
 
 func validateClaims(claims AccessClaims, config Config, options VerifyOptions) error {
 	config = config.normalized()
-	issuer := firstNonEmpty(options.Issuer, config.Issuer)
+	issuer := options.Issuer
+	if issuer == "" {
+		issuer = config.Issuer
+	}
 	audience := firstNonEmpty(options.Audience, config.Audience, DefaultAudience)
 	requiredScope := firstNonEmpty(options.RequiredScope, config.RequiredScope)
 	skew := options.MaxClockSkew
@@ -204,13 +207,4 @@ func hasString(values []string, expected string) bool {
 		}
 	}
 	return false
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
