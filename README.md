@@ -118,3 +118,8 @@ The SDK verifies:
 - required scopes
 
 Discovery keys are fetched and cached for offline verification after warm-up.
+
+
+## Verification Support
+
+This SDK fully supports local validation of PASETO v4.public tokens using discovered and cached Ed25519 keys, ensuring secure offline checking of audience, issuer, expiry, and scopes.
